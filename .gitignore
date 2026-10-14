@@ -1,0 +1,5 @@
+node_modules/
+.sphere-dev/
+mod/.claude-plugin/types/
+dist/
+*.bun-build

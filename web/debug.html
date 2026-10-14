@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Dyson Sphere (spike)</title>
+<style>
+  :root { --bg: #fafafa; --fg: #1a1a1a; --muted: #6b6b6b; --line: #e2e2e2; --card: #fff; --accent: #2563eb; --red: #c62828; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #141414; --fg: #e8e8e8; --muted: #999; --line: #2c2c2c; --card: #1c1c1c; --accent: #6b9bff; --red: #ff6b6b; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: baseline; }
+  header b { font-size: 15px; } header span { color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; height: calc(100vh - 45px); }
+  #sessions { border-right: 1px solid var(--line); overflow: auto; }
+  .s { padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .s.sel { background: var(--card); box-shadow: inset 3px 0 var(--accent); }
+  .s .top { display: flex; justify-content: space-between; gap: 8px; }
+  .s .meta, .muted { color: var(--muted); font-size: 12px; }
+  .s .last { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .state-working { color: var(--accent); } .state-ended, .offline { color: var(--muted); } .asks { color: var(--red); font-weight: 600; }
+  #detail { display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+  #head { padding: 10px 16px; border-bottom: 1px solid var(--line); }
+  #rows { overflow: auto; padding: 8px 16px; font: 12.5px/1.45 ui-monospace, monospace; }
+  .row { padding: 4px 0; border-bottom: 1px dashed var(--line); white-space: pre-wrap; word-break: break-word; }
+  .row .k { color: var(--muted); display: inline-block; min-width: 92px; }
+  .row.prompt .k, .row.note .k { color: var(--accent); }
+  #compose { border-top: 1px solid var(--line); padding: 10px 16px; display: grid; gap: 8px; }
+  #compose .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  textarea { width: 100%; min-height: 56px; font: inherit; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  button, select { font: inherit; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .list { font-size: 12.5px; display: grid; gap: 4px; }
+  .sug { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; height: auto; } #sessions { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--line); } #detail { height: 70vh; } }
+</style>
+</head>
+<body>
+<header><b>Dyson Sphere</b><span id="who">connecting…</span></header>
+<main>
+  <section id="sessions"></section>
+  <section id="detail">
+    <div id="head" class="muted">Pick a session.</div>
+    <div id="rows"></div>
+    <div id="compose" hidden>
+      <div id="permissions" class="list"></div>
+      <div id="approvals" class="list"></div>
+      <div id="deliveries" class="list"></div>
+      <textarea id="text" placeholder="Message to this agent"></textarea>
+      <div class="bar">
+        <select id="mode"><option value="queue">queue (when idle)</option><option value="steer">steer (mid-turn)</option><option value="interrupt">interrupt</option></select>
+        <button id="send" class="primary">Send</button>
+        <button id="fill" title="Put the text in the owner's prompt box">Put in prompt box</button>
+        <button id="interrupt">Interrupt</button>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+// Dev login only: production identity comes from Tailscale. Keep the token out of the URL bar and history.
+const fromUrl = new URLSearchParams(location.search).get('token')
+if (fromUrl) { try { sessionStorage.setItem('sphere-token', fromUrl) } catch {} ; history.replaceState(null, '', location.pathname) }
+let stored = null
+try { stored = sessionStorage.getItem('sphere-token') } catch {}
+// Behind Tailscale no token is needed; locally, open the page with ?token=…
+const token = fromUrl || stored || ''
+const sessions = new Map()
+let me = '', selected = null, lastSeq = 0, n = 0
+const pending = new Map()
+const $ = id => document.getElementById(id)
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+const ago = iso => { if (!iso) return 'unknown'; const s = Math.round((Date.now() - Date.parse(iso)) / 1000); return s < 60 ? s + 's ago' : s < 3600 ? Math.round(s / 60) + 'm ago' : Math.round(s / 3600) + 'h ago' }
+
+const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`)
+const raw = m => ws.send(JSON.stringify(m))
+const cmd = (op, args) => new Promise((resolve, reject) => { const id = String(++n); pending.set(id, { resolve, reject }); raw({ t: 'cmd', id, op, args }) })
+ws.onopen = () => raw({ t: 'hello', token, role: 'web' })
+ws.onclose = () => { $('who').textContent = 'disconnected — reload' }
+ws.onmessage = msg => {
+  const m = JSON.parse(msg.data)
+  if (m.t === 'welcome') { me = m.identity; $('who').textContent = 'signed in as ' + me; raw({ t: 'sub', topic: 'world' }) }
+  else if (m.t === 'state') { sessions.set(m.session.id, m.session); renderSessions(); if (m.session.id === selected) renderHead() }
+  else if (m.t === 'res') { const p = pending.get(m.id); pending.delete(m.id); m.ok ? p.resolve(m.data) : p.reject(new Error(m.error)) }
+  else if (m.t === 'ev') onEvent(m.ev)
+  else if (m.t === 'error') console.warn(m.error)
+}
+
+function onEvent(ev) {
+  if (ev.topic === 'session:' + selected && ev.seq > lastSeq) { lastSeq = ev.seq; addRow(ev) }
+  if ((ev.type === 'delivery' || ev.type.startsWith('suggestion.') || ev.type.startsWith('permission.')) && ev.data.sessionId === selected) refreshSide()
+}
+
+function renderSessions() {
+  const list = [...sessions.values()].sort((a, b) => (b.lastActivityAt || '').localeCompare(a.lastActivityAt || ''))
+  $('sessions').innerHTML = list.map(s => `
+    <div class="s ${s.id === selected ? 'sel' : ''}" data-id="${esc(s.id)}">
+      <div class="top"><b>${esc(s.repo || s.cwd.split('/').pop())}</b>
+        <span class="state-${esc(s.state)} ${s.connected ? '' : 'offline'}">${esc(s.state)}${s.connected ? '' : ' · offline'}</span></div>
+      <div class="meta">${esc(s.owner)} · ${esc(s.machine)} · ${esc(s.id.slice(0, 8))} · ${ago(s.lastActivityAt)}
+        ${s.pendingPermissions ? `<span class="asks">· ${s.pendingPermissions} waiting for permission</span>` : ''}
+        ${s.pendingSuggestions ? `<span class="asks">· ${s.pendingSuggestions} to approve</span>` : ''}</div>
+      <div class="last">${esc(s.lastSummary || '')}</div>
+    </div>`).join('') || '<div class="s muted">No sessions yet.</div>'
+  for (const el of document.querySelectorAll('.s[data-id]')) el.onclick = () => select(el.dataset.id)
+}
+
+function renderHead() {
+  const s = sessions.get(selected)
+  const mine = s.owner === me
+  $('head').innerHTML = `<b>${esc(s.repo || s.cwd)}</b> <span class="muted">${esc(s.branch || '')} · ${esc(s.owner)} on ${esc(s.machine)} · ${esc(s.state)}${s.connected ? '' : ' (offline)'}</span>`
+  $('send').textContent = mine ? 'Send' : 'Suggest to ' + s.owner
+  $('fill').hidden = $('interrupt').hidden = !mine
+}
+
+function addRow(ev) {
+  const d = ev.data
+  if (d.kind === 'attachment') return // system reminders and context the engine injects
+  const el = document.createElement('div')
+  el.className = 'row ' + String(d.kind).replace(/[^a-z-]/g, '')
+  el.innerHTML = `<span class="k">${esc(d.kind)}${d.agentId ? '*' : ''}</span>${esc(d.text)}${d.bodyId ? ` <a href="#" data-body="${esc(d.bodyId)}">[${esc(d.fullLength)} chars, show all]</a>` : ''}`
+  const box = $('rows'), atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 30
+  box.appendChild(el)
+  if (atEnd) box.scrollTop = box.scrollHeight
+  const a = el.querySelector('[data-body]')
+  if (a) a.onclick = async e => { e.preventDefault(); const b = await cmd('body', { id: d.bodyId }); el.innerHTML = `<span class="k">${esc(d.kind)}</span>${esc(b.text)}` }
+}
+
+async function select(id) {
+  if (selected) raw({ t: 'unsub', topic: 'session:' + selected })
+  selected = id; renderSessions(); renderHead()
+  $('compose').hidden = false; $('rows').innerHTML = ''
+  const r = await cmd('show', { sessionId: id, tail: 300 })
+  lastSeq = 0
+  for (const ev of r.rows) { lastSeq = ev.seq; addRow(ev) }
+  raw({ t: 'sub', topic: 'session:' + id, since: lastSeq })
+  refreshSide()
+}
+
+async function refreshSide() {
+  const s = sessions.get(selected)
+  const r = await cmd('show', { sessionId: selected, tail: 0 })
+  $('deliveries').innerHTML = r.deliveries.slice(-5).map(d => `<div class="muted">${esc(d.msgId)} · <b>${esc(d.state)}</b> · ${esc(d.author)}: ${esc((d.text || d.kind).slice(0, 80))}${d.detail ? ' (' + esc(d.detail) + ')' : ''}</div>`).join('')
+  if (s.owner !== me) return ($('approvals').innerHTML = $('permissions').innerHTML = '')
+  const { permissions } = await cmd('permissions', {})
+  $('permissions').innerHTML = permissions.filter(p => p.sessionId === selected).map(p => `
+    <div class="sug"><span class="asks">Permission: ${esc(p.tool)}</span> <code>${esc(p.input.slice(0, 160))}</code>
+      <button class="primary" data-allow="${esc(p.reqId)}">Allow</button><button data-deny="${esc(p.reqId)}">Deny</button></div>`).join('')
+  for (const b of document.querySelectorAll('[data-allow]')) b.onclick = () => cmd('decide', { reqId: b.dataset.allow, decision: 'allow' }).then(refreshSide, e => alert(e.message))
+  for (const b of document.querySelectorAll('[data-deny]')) b.onclick = () => cmd('decide', { reqId: b.dataset.deny, decision: 'deny' }).then(refreshSide, e => alert(e.message))
+  const { suggestions } = await cmd('approvals', {})
+  $('approvals').innerHTML = suggestions.filter(x => x.sessionId === selected).map(x => `
+    <div class="sug"><span class="asks">${esc(x.author)} suggests (${esc(x.mode)}):</span> ${esc(x.text)}
+      <button data-ok="${x.id}">Send as is</button><button data-edit="${x.id}">Edit</button><button data-no="${x.id}">Reject</button></div>`).join('')
+  for (const b of document.querySelectorAll('[data-ok]')) b.onclick = () => cmd('approve', { id: b.dataset.ok }).then(refreshSide)
+  for (const b of document.querySelectorAll('[data-no]')) b.onclick = () => cmd('reject', { id: b.dataset.no }).then(refreshSide)
+  for (const b of document.querySelectorAll('[data-edit]')) b.onclick = () => {
+    const x = suggestions.find(y => y.id === b.dataset.edit)
+    $('text').value = x.text; $('send').textContent = 'Send edited'; $('send').dataset.edit = x.id
+  }
+}
+
+$('send').onclick = async () => {
+  const text = $('text').value.trim(); if (!text) return
+  const s = sessions.get(selected), edit = $('send').dataset.edit
+  try {
+    if (edit) { await cmd('approve', { id: edit, text }); delete $('send').dataset.edit }
+    else await cmd(s.owner === me ? 'send' : 'suggest', { sessionId: selected, text, mode: $('mode').value })
+    $('text').value = ''; renderHead(); refreshSide()
+  } catch (e) { alert(e.message) }
+}
+$('fill').onclick = async () => { const text = $('text').value.trim(); if (text) { await cmd('fill', { sessionId: selected, text }); $('text').value = ''; refreshSide() } }
+$('interrupt').onclick = () => cmd('interrupt', { sessionId: selected }).then(refreshSide, e => alert(e.message))
+setInterval(renderSessions, 15000)
+</script>
+</body>
+</html>

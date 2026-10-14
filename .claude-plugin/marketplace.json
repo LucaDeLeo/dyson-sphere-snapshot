@@ -1,0 +1,16 @@
+{
+  "name": "dyson-sphere",
+  "owner": {
+    "name": "Luca De Leo"
+  },
+  "plugins": [
+    {
+      "name": "sphere",
+      "source": "./mod",
+      "description": "Reports every Claude Code session to Dyson Sphere and applies steering from it"
+    }
+  ],
+  "metadata": {
+    "description": "Dyson Sphere: a shared, live canvas of every Claude Code session on the team"
+  }
+}

@@ -1,0 +1,4 @@
+# `bun test` runs the server, CLI and bridge tests in tests/. The mod's own tests (mod/tests)
+# need Claude Code's test kit: run them with `claude plugin test mod`.
+[test]
+root = "tests"

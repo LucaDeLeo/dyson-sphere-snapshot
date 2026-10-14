@@ -1,0 +1,33 @@
+{
+  "name": "dyson-sphere",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "shared",
+    "server",
+    "sphere",
+    "web"
+  ],
+  "scripts": {
+    "server": "bun run server/src/main.ts",
+    "sphere": "bun run sphere/src/cli.ts",
+    "typecheck": "tsc -p . --noEmit",
+    "build:cli": "bun build --compile sphere/src/cli.ts --outfile dist/sphere",
+    "simulate": "bun run scripts/simulate.ts",
+    "demo": "bun run scripts/demo.ts",
+    "test": "bun test",
+    "check:canvas": "bun run scripts/check-canvas.ts",
+    "check:terminal": "bun run scripts/check-terminal.ts",
+    "check:browser": "bun run scripts/check-browser.ts"
+  },
+  "devDependencies": {
+    "@tldraw/state": "5.5.2",
+    "@tldraw/store": "5.5.2",
+    "@tldraw/sync-core": "5.5.2",
+    "@tldraw/tlschema": "5.5.2",
+    "@tldraw/utils": "5.5.2",
+    "@types/bun": "latest",
+    "playwright": "1.64.0",
+    "typescript": "^5.9.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "sphere",
+  "version": "0.1.0",
+  "description": "Reports this Claude Code session to Dyson Sphere and applies steering from it",
+  "author": {
+    "name": "Luca De Leo"
+  }
+}

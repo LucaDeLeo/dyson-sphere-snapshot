@@ -1,0 +1,26 @@
+/* Linear in the inspector (CS-2523, CS-2524). Uses the tokens in styles.css, so light and dark follow. */
+
+.linear-panel { display: grid; gap: 8px; margin-top: 4px; }
+.linear-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 2px 0 0; }
+.linear-line .linear-who { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.linear-line .hint + .btn:not(.ghost) { margin-left: auto; }
+
+.linear-form {
+  display: grid; gap: 4px; padding: 10px; border-radius: 8px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+.linear-form label { font-size: var(--t-xs); font-weight: 600; color: var(--ink-2); margin-top: 4px; }
+.linear-form label:first-of-type { margin-top: 0; }
+.linear-form input:not([type='checkbox']), .linear-form select, .linear-form textarea {
+  width: 100%; box-sizing: border-box; min-height: 28px; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink);
+  font: inherit; font-size: var(--t-sm);
+}
+.linear-form textarea { resize: vertical; line-height: 1.45; }
+.linear-form input:focus-visible, .linear-form select:focus-visible, .linear-form textarea:focus-visible {
+  outline: none; border-color: var(--accent-ink); box-shadow: 0 0 0 3px color-mix(in oklch, var(--accent) 25%, transparent);
+}
+.linear-form .linear-check { display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--ink); margin-top: 6px; }
+.linear-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.linear-two > div { display: grid; gap: 4px; min-width: 0; }
+.linear-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }

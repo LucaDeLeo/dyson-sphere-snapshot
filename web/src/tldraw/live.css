@@ -1,0 +1,105 @@
+/* Live cards (live.tsx): a card's chrome follows the color scheme; a terminal stays dark in both,
+   since the programs in it choose their colors for a dark terminal. */
+
+.live-card {
+  --live-title-h: 32px;
+  --term-bg: #16181d;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  pointer-events: all;
+}
+.live-card.editing { border-color: var(--accent-ink); box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 45%, transparent); }
+.term-card { background: var(--term-bg); }
+
+.live-title {
+  height: var(--live-title-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  font: var(--t-xs) / 1 var(--font);
+  color: var(--ink-2);
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.live-name { color: var(--ink); font-weight: 600; font-size: var(--t-sm); min-width: 0; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; }
+.live-owner { color: var(--ink-3); flex: none; }
+.live-hint { margin-left: auto; color: var(--ink-3); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.live-action { flex: none; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--offline); }
+.live-dot.live { background: var(--ok); }
+.live-dot.unavailable, .live-dot.ended { background: transparent; border: 1.5px solid var(--offline); }
+
+.live-status {
+  position: absolute;
+  inset: var(--live-title-h) 0 0 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  font: var(--t-md) / 1.45 var(--font);
+  color: oklch(0.82 0.006 75);
+  background: color-mix(in oklch, var(--term-bg) 88%, transparent);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* The app-owned element, in tldraw's slot over the card: the terminal's area below the title. */
+.term-root {
+  position: absolute;
+  inset: 32px 0 0 0;
+  padding: 6px 8px;
+  overflow: hidden;
+  pointer-events: none;
+  background: #16181d;
+  border-radius: 0 0 10px 10px;
+}
+.term-root.interactive { pointer-events: all; cursor: text; }
+.term-host { transform-origin: 0 0; width: max-content; }
+.term-host .xterm .xterm-viewport { background-color: #16181d; }
+
+/* Browser cards: the tab's frames under an address bar. */
+.browser-card { background: var(--surface); }
+.browser-nav { display: flex; flex: none; }
+.browser-nav .btn { width: 22px; padding: 0; justify-content: center; }
+.browser-address {
+  flex: 1 1 auto;
+  min-width: 80px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--t-xs) / 1 var(--font);
+}
+.browser-address:focus { outline: 2px solid var(--accent-ink); outline-offset: -1px; }
+.browser-url { font-weight: 400; font-size: var(--t-xs); color: var(--ink-2); flex: 1 1 auto; }
+.browser-root {
+  position: absolute;
+  inset: 32px 0 0 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--surface);
+  border-radius: 0 0 10px 10px;
+}
+.browser-root.interactive { pointer-events: all; cursor: default; }
+.browser-frame { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; }
+.browser-root.inactive .browser-frame { filter: saturate(0.6); }
+.browser-keys { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; resize: none; pointer-events: none; }
+
+/* Live elements no shape shows: kept, connected, out of sight. */
+.live-parking-lot { position: fixed; left: -10000px; top: -10000px; width: 1px; height: 1px; overflow: hidden; visibility: hidden; }
+
+.session-actions {
+  position: absolute;
+  z-index: 300;
+  display: flex;
+  gap: 4px;
+  transform: translate(-100%, calc(-100% - 6px));
+}
+.session-actions .btn { background: var(--surface); box-shadow: var(--shadow-float); }
